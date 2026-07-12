@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/search.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/curate.js": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  }
+}
