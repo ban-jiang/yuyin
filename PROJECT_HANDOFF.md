@@ -57,13 +57,18 @@
 
 ```
 寻找项目/
-├── index.html          # 全部前端（模板 CSS + 渲染 + 选择流程）
+├── index.html          # 页面语义结构与资源入口
+├── styles/
+│   └── app.css         # 全局界面、卡片模板、响应式与艺术背景
 ├── server.js           # 本地开发 HTTP 服务
 ├── api/
+│   ├── _security.js    # 限流、超时与热实例缓存
 │   ├── search.js       # Vercel serverless: /api/search
-│   └── curate.js       # Vercel serverless: /api/curate
+│   ├── curate.js       # Vercel serverless: /api/curate
+│   └── lyrics.js       # Vercel serverless: /api/lyrics
 ├── src/
-│   └── api.js          # 前端 API 封装（searchPoetry + curatePoetry）
+│   ├── app.js          # 搜索、选择、渲染、编辑、草稿与历史逻辑
+│   └── api.js          # 前端 API 请求封装
 ├── vercel.json         # Vercel 部署配置
 ├── package.json        # Node 24.x 引擎
 ├── .env.example        # 环境变量模板
@@ -171,3 +176,4 @@ node server.js
 - 手机端右侧编辑器新增“版式｜句子｜纸墨”三个标签，仅在 700px 以下启用。模板与构图说明归入版式，单句编辑归入句子，简繁与背景归入纸墨；点击卡片句子时自动切换到句子标签。桌面端仍显示完整侧栏，不改变原工作流。
 - “恢复上次作品”升级为最近作品历史：每张新生成的诗词卡或歌词卡分配独立 ID，句子微调、模板、背景、构图和简繁变化会更新同一条记录。首页显示最近 10 张作品的名称、模板和修改时间，支持重新打开继续编辑及删除。历史与作品正文均只存储在当前浏览器 `localStorage`；单条最近草稿仍保留，用于快速恢复最后一次作品。
 - 截图工作流新增 3:4 社交分享与 A4 竖版两种画幅，切换后调用 `fitQuotes()` 重新检测溢出。编辑器可显示 4% 内缩的安全边距参考线，进入截图预览时自动隐藏。画幅与参考线状态均进入撤销、本地草稿和最近作品历史；手机端归入“版式”标签。
+- 完成 `index.html` 第一阶段拆分：约 52KB 内联样式迁移到 `styles/app.css`，约 38KB 业务脚本迁移到 `src/app.js`，HTML 从约 95KB 降至约 7.5KB，仅保留页面结构与资源引用。`src/api.js` 继续独立负责网络请求；本地 `server.js` 增加 `.css` 和 `.svg` MIME 类型。后续新增功能不得重新写入内联 `<style>` 或大型内联 `<script>`。

@@ -207,7 +207,11 @@ function serveStatic(req, res) {
   fs.readFile(filePath, (error, data) => {
     if (error) return send(res, 404, 'Not found', 'text/plain; charset=utf-8');
     const ext = path.extname(filePath);
-    const type = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'text/javascript; charset=utf-8' : 'application/octet-stream';
+    const type = ext === '.html' ? 'text/html; charset=utf-8'
+      : ext === '.js' ? 'text/javascript; charset=utf-8'
+      : ext === '.css' ? 'text/css; charset=utf-8'
+      : ext === '.svg' ? 'image/svg+xml'
+      : 'application/octet-stream';
     send(res, 200, data, type);
   });
 }
