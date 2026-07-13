@@ -1,3 +1,5 @@
+const { checkRateLimit, fetchWithTimeout } = require('./_security.js');
+
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
@@ -35,7 +37,7 @@ function ensureQuoteCount(quotes, works) {
 async function curateWithDeepSeek(works) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return demoCurate(works);
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
+  const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -65,6 +67,8 @@ async function curateWithDeepSeek(works) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
   try {
+    const retryAfter = checkRateLimit(req);
+    if (retryAfter) return send(res, 429, { error: `请求过于频繁，请在 ${retryAfter} 秒后重试` });
     const raw = typeof req.body === 'string' ? req.body : '';
     const body = raw ? JSON.parse(raw) : (req.body || {});
     const works = Array.isArray(body.works) ? body.works.slice(0, 6).map(work => ({

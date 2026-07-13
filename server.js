@@ -6,6 +6,19 @@ const lyricsApiHandler = require('./api/lyrics.js');
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || '0.0.0.0';
 const ROOT = __dirname;
+const localRateBuckets = new Map();
+
+function localRateLimited(req, limit = 30) {
+  const now = Date.now();
+  const key = req.socket.remoteAddress || 'local';
+  const bucket = localRateBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    localRateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > limit;
+}
 
 const demoCandidates = {
   default: [
@@ -200,6 +213,7 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method === 'POST' && localRateLimited(req)) return send(res, 429, { error: '请求过于频繁，请稍后重试' });
   if (req.method === 'POST' && req.url === '/api/search') return handleApi(req, res);
   if (req.method === 'POST' && req.url === '/api/curate') return handleCurate(req, res);
   if (req.method === 'POST' && req.url === '/api/lyrics') return handleLyrics(req, res);

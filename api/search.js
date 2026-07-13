@@ -3,6 +3,7 @@ const demoCandidates = [
   { id: 'xin-qi-ji-qing-yu-an', author: '辛弃疾', dynasty: '宋', title: '青玉案·元夕', reason: '灯火繁盛与孤独凝望相互映照', sourceStatus: 'demo', lines: ['东风夜放花千树，更吹落，星如雨。', '宝马雕车香满路。', '凤箫声动，玉壶光转，一夜鱼龙舞。', '蛾儿雪柳黄金缕，笑语盈盈暗香去。', '众里寻他千百度。', '蓦然回首，那人却在，灯火阑珊处。', '一夜鱼龙舞。'] },
   { id: 'li-bai-jiang-jin-jiu', author: '李白', dynasty: '唐', title: '将进酒', reason: '以奔涌节奏书写时间、生命与豪情', sourceStatus: 'demo', lines: ['君不见黄河之水天上来，奔流到海不复回。', '君不见高堂明镜悲白发，朝如青丝暮成雪。', '人生得意须尽欢，莫使金樽空对月。', '天生我材必有用，千金散尽还复来。', '烹羊宰牛且为乐，会须一饮三百杯。', '古来圣贤皆寂寞，惟有饮者留其名。', '与尔同销万古愁。'] }
 ];
+const { checkRateLimit, fetchWithTimeout, getCache, setCache } = require('./_security.js');
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -40,7 +41,7 @@ async function searchWithDeepSeek(query) {
   const genres = requestedGenres(query);
   if (!apiKey) return { candidates: author ? [] : demoCandidates, mode: 'demo', requestedAuthor: author || undefined };
 
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
+  const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -69,11 +70,17 @@ async function searchWithDeepSeek(query) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
   try {
+    const retryAfter = checkRateLimit(req);
+    if (retryAfter) return send(res, 429, { error: `请求过于频繁，请在 ${retryAfter} 秒后重试` });
     const raw = typeof req.body === 'string' ? req.body : '';
     const body = raw ? JSON.parse(raw) : (req.body || {});
     const query = String(body.query || '').trim();
     if (query.length < 2 || query.length > 200) return send(res, 400, { error: '请输入 2-200 个字符' });
+    const cacheKey = `search:${query.normalize('NFC').toLowerCase()}`;
+    const cached = getCache(cacheKey);
+    if (cached) return send(res, 200, { ...cached, cached: true });
     const result = await searchWithDeepSeek(query);
+    setCache(cacheKey, result);
     send(res, 200, result);
   } catch (error) {
     send(res, 502, { error: '候选生成失败，请稍后重试', detail: error.message });

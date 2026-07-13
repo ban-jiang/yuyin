@@ -5,7 +5,8 @@ exports.handler = async function (event) {
   let responseBody = {};
   const req = {
     method: event.httpMethod,
-    body: event.body || '{}'
+    body: event.body || '{}',
+    headers: event.headers || {}
   };
   const res = {
     writeHead(status) { statusCode = status; },
