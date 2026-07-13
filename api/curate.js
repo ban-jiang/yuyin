@@ -17,6 +17,21 @@ function demoCurate(works) {
   return { quotes, themeChar, mode: 'demo' };
 }
 
+function ensureQuoteCount(quotes, works) {
+  const result = quotes.slice(0, 9);
+  const seen = new Set(result.map(item => String(item.text).normalize('NFC').replace(/\s+/g, '')));
+  for (const work of works) {
+    for (const line of work.lines) {
+      const key = String(line).normalize('NFC').replace(/\s+/g, '');
+      if (result.length >= 7) return result;
+      if (!key || seen.has(key)) continue;
+      result.push({ text: String(line), source: `${work.author}《${work.title}》` });
+      seen.add(key);
+    }
+  }
+  return result;
+}
+
 async function curateWithDeepSeek(works) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return demoCurate(works);
@@ -28,7 +43,7 @@ async function curateWithDeepSeek(works) {
       response_format: { type: 'json_object' },
       temperature: 0.25,
       messages: [
-        { role: 'system', content: '你是诗词卡片内容策展人。用户已经选择多篇作品。请从每篇作品给出的原句中均衡选择，总计5-9句；不得改写、拼接或新增原文。只输出JSON：{"quotes":[{"text":"原句","source":"作者《篇名》"}],"themeChar":"一个主题汉字"}。至少照顾到每篇被选作品。' },
+        { role: 'system', content: '你是诗词卡片内容策展人。用户已经选择多篇作品。请从每篇作品给出的原句中均衡选择，总计7-9句；不得改写、拼接或新增原文。只输出JSON：{"quotes":[{"text":"原句","source":"作者《篇名》"}],"themeChar":"一个主题汉字"}。至少照顾到每篇被选作品。' },
         { role: 'user', content: JSON.stringify(works) }
       ]
     })
@@ -43,7 +58,7 @@ async function curateWithDeepSeek(works) {
     .slice(0, 9)
     .map(item => ({ text: String(item.text || '').trim(), source: String(item.source || '') }));
   const verified = rawQuotes.filter(item => allowed.has(normalize(item.text)));
-  const quotes = verified.length ? verified : rawQuotes;
+  const quotes = ensureQuoteCount(verified.length ? verified : rawQuotes, works);
   return { quotes, themeChar: String(parsed.themeChar || '诗').slice(0, 1), mode: 'deepseek' };
 }
 
