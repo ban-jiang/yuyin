@@ -133,6 +133,10 @@ node server.js
 - 自定义作品生成后继续隐藏演示诗人选择，只保留“重新选择诗词”；同时修复自定义作品点击“换一个构图”可能失效的问题。
 - 新增 Netlify 部署支持：`netlify.toml`、`netlify/functions/search.js`、`netlify/functions/curate.js`。前端继续请求 `/api/search` 与 `/api/curate`，由 Netlify redirects 转发到 Functions。
 - Vercel 与 Netlify 可并行部署；两端都需要单独配置环境变量 `DEEPSEEK_API_KEY`，密钥不得提交到 GitHub。
+- 入口搜索页增加低透明度诗句背景，选取《诗经》、汉魏、晋、唐、宋、元、清等时期名句，以横排、竖排和轻微角度变化形成文学氛围；背景不响应点击，不影响搜索操作，手机端自动减少诗句数量。
+- 删除无实际价值的“印刷偏移”控制项及事件逻辑。
+- 修复普通模板仍出现 9 句的问题：增加 CSS 硬约束，除 `glyphfield`（字阵残章）外，所有模板强制隐藏 q8/q9；原有 JavaScript 7/9 句规则继续作为第一层约束。
+- 查明卡片底部出现毛泽东诗句的原因：模板初始 DOM 使用毛泽东诗词作为演示占位，旧逻辑只隐藏未用句子而未清空文本。现在自定义作品渲染时会清空所有未使用占位文字，并用 `[hidden]` 强制隐藏，避免旧诗句被模板 CSS 重新显示。
 
 ## 下一步建议
 
