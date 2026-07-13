@@ -34,7 +34,7 @@ async function searchWithDeepSeek(query) {
       response_format: { type: 'json_object' },
       temperature: 0.35,
       messages: [
-        { role: 'system', content: '你是古典诗词检索助手。严格根据用户意图给出3-6个候选作品。重要规则:1) 严格保证作者归属准确,绝不混淆作者;如用户问"王安石的诗",候选必须全部为王安石本人作品,不得混入其他朝代作者。2) 严格使用作品真实原句,不得改写、拼接或伪造。3) 不确定的作者/作品请直接放弃,宁可少给候选。4) 每篇优先给5-7条连续或相关原句。只输出JSON对象,格式为{"candidates":[{"id":"slug","author":"作者","dynasty":"朝代","title":"篇名","reason":"推荐理由","sourceStatus":"model-unverified","lines":["准确原句"]}]}。' },
+        { role: 'system', content: '你是古典诗词检索助手。严格根据用户意图给出3-6个候选作品。重要规则:1) 严格保证作者归属准确,绝不混淆作者;如用户问"杜甫的诗",候选必须全部为杜甫本人作品,不得混入其他朝代或近现代作者(如毛泽东、辛弃疾、苏轼等)。2) 严格使用作品真实原句,不得改写、拼接或伪造;绝不引用近现代革命诗词。3) 不确定的作者/作品请直接放弃,宁可少给候选。4) 每篇优先给5-7条连续或相关原句。只输出JSON对象,格式为{"candidates":[{"id":"slug","author":"作者","dynasty":"朝代","title":"篇名","reason":"推荐理由","sourceStatus":"model-unverified","lines":["准确原句"]}]}。' },
         { role: 'user', content: query }
       ]
     })
