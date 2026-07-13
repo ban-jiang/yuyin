@@ -44,9 +44,15 @@ function validateCandidates(value) {
   })).filter(item => item.lines.length > 0);
 }
 
+function requestedAuthor(query) {
+  const known = ['杜甫','李白','苏轼','辛弃疾','毛泽东','王安石','白居易','李清照','陆游','陶渊明','曹操','纳兰性德'];
+  return known.find(name => query.includes(name)) || '';
+}
+
 async function searchWithDeepSeek(query) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) return { candidates: demoCandidates.default, mode: 'demo' };
+  const author = requestedAuthor(query);
+  if (!apiKey) return { candidates: author ? [] : demoCandidates.default, mode: 'demo', requestedAuthor: author || undefined };
 
   const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
@@ -64,7 +70,9 @@ async function searchWithDeepSeek(query) {
   if (!response.ok) throw new Error(`DeepSeek returned ${response.status}`);
   const payload = await response.json();
   const parsed = JSON.parse(payload.choices?.[0]?.message?.content || '{}');
-  return { candidates: validateCandidates(parsed), mode: 'deepseek' };
+  const candidates = validateCandidates(parsed);
+  const filtered = author ? candidates.filter(item => item.author.normalize('NFC') === author) : candidates;
+  return { candidates: filtered, mode: 'deepseek', requestedAuthor: author || undefined };
 }
 
 function demoCurate(works) {
