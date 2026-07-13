@@ -43,5 +43,27 @@
     }
   }
 
-  window.YuyinApi = { searchPoetry, curatePoetry };
+  async function extractLyrics(lyrics, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeout || 30000);
+    try {
+      const response = await fetch('/api/lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lyrics }),
+        signal: controller.signal
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '歌词摘句失败');
+      if (!Array.isArray(result.candidates)) throw new Error('歌词候选格式无效');
+      return result;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('歌词摘句超时，请稍后重试');
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  window.YuyinApi = { searchPoetry, curatePoetry, extractLyrics };
 })();

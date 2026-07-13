@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const lyricsApiHandler = require('./api/lyrics.js');
 
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -164,6 +165,15 @@ async function handleCurate(req, res) {
   }
 }
 
+async function handleLyrics(req, res) {
+  try {
+    req.body = await readBody(req);
+    await lyricsApiHandler(req, res);
+  } catch (error) {
+    send(res, 502, { error: '歌词摘句失败，请稍后重试', detail: error.message });
+  }
+}
+
 function serveStatic(req, res) {
   const requestPath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
   const filePath = path.resolve(ROOT, `.${requestPath}`);
@@ -179,6 +189,7 @@ function serveStatic(req, res) {
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/search') return handleApi(req, res);
   if (req.method === 'POST' && req.url === '/api/curate') return handleCurate(req, res);
+  if (req.method === 'POST' && req.url === '/api/lyrics') return handleLyrics(req, res);
   if (req.method === 'GET') return serveStatic(req, res);
   send(res, 405, { error: 'Method not allowed' });
 });
