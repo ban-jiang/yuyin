@@ -141,6 +141,8 @@ node server.js
 - 双构图参考公开的 Swiss Style / International Typographic Style 原则：模块网格、非对称布局、左对齐和负空间；同时吸收包豪斯几何尺度对比及日本现代书籍设计的偏心留白和纵横阅读方向切换。实现只使用固定网格单元，不使用随机绝对坐标。
 - 按钮现在在 `data-composition="a"` 与 `data-composition="b"` 间切换，并显示当前 A/B 状态；切换模板时当前构图状态继续生效。
 - 本地端到端验证：完成搜索、选诗、策展、生成后，逐一检查七种 B 构图。所有普通模板均显示 7 句，七种模板均无文字溢出、无句块几何重叠；390×844 手机视口无横向溢出，编辑器保持可用。
+- 首页搜索层升级为深褐/古铜色碑刻拓片背景：全部纹理由 CSS 与内嵌 SVG 生成，使用 `feTurbulence`、`feColorMatrix`、`feGaussianBlur`、`feBlend` 和 `feComponentTransfer` 模拟纸纤维、石花、墨渍与风化，不依赖图片或外部资源。
+- 拓片背景固定在 `.discovery` 内的 `.poetry-atmosphere`，`pointer-events:none`，搜索框、按钮和候选卡交互层保持在其上方。中央 70% 区域固定排布 9 句指定历代名句，包含 4 句竖排；字体使用系统行楷/楷体回退，淡金色中等透明度。390px 手机端有独立位置、字号和换行约束。
 
 ## 下一步建议
 
