@@ -43,7 +43,7 @@ async function curateWithDeepSeek(works) {
       response_format: { type: 'json_object' },
       temperature: 0.25,
       messages: [
-        { role: 'system', content: '你是诗词卡片内容策展人。用户已经选择多篇作品。请从每篇作品给出的原句中均衡选择，总计7-9句；不得改写、拼接或新增原文。只输出JSON：{"quotes":[{"text":"原句","source":"作者《篇名》"}],"themeChar":"一个主题汉字"}。至少照顾到每篇被选作品。' },
+        { role: 'system', content: '你是中国古代文学卡片内容策展人。用户已经选择诗、词、曲或古文作品。请从每篇作品给出的原句中均衡选择，总计7-9句；用户混选诗词与古文时，两类都必须有句子入选。不得改写、拼接或新增原文。只输出JSON：{"quotes":[{"text":"原句","source":"作者《篇名》"}],"themeChar":"一个主题汉字"}。至少照顾到每篇被选作品。' },
         { role: 'user', content: JSON.stringify(works) }
       ]
     })
