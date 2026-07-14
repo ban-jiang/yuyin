@@ -3,9 +3,18 @@ const fs = require('fs');
 const path = require('path');
 const lyricsApiHandler = require('./api/lyrics.js');
 
+const ROOT = __dirname;
+const localEnvPath = path.join(ROOT, '.env.local');
+if (fs.existsSync(localEnvPath)) {
+  fs.readFileSync(localEnvPath, 'utf8').split(/\r?\n/).forEach(line => {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!match || !match[2] || process.env[match[1]]) return;
+    process.env[match[1]] = match[2].replace(/^(['"])(.*)\1$/, '$2');
+  });
+}
+
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || '0.0.0.0';
-const ROOT = __dirname;
 const localRateBuckets = new Map();
 
 function localRateLimited(req, limit = 30) {
