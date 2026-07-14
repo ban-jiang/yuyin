@@ -4,6 +4,7 @@ const demoCandidates = [
   { id: 'li-bai-jiang-jin-jiu', author: '李白', dynasty: '唐', title: '将进酒', reason: '以奔涌节奏书写时间、生命与豪情', sourceStatus: 'demo', lines: ['君不见黄河之水天上来，奔流到海不复回。', '君不见高堂明镜悲白发，朝如青丝暮成雪。', '人生得意须尽欢，莫使金樽空对月。', '天生我材必有用，千金散尽还复来。', '烹羊宰牛且为乐，会须一饮三百杯。', '古来圣贤皆寂寞，惟有饮者留其名。', '与尔同销万古愁。'] }
 ];
 const { checkRateLimit, fetchWithTimeout, getCache, setCache } = require('./_security.js');
+const { enrichCandidatesWithPoetrySource } = require('./_poetry-source.js');
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -39,7 +40,7 @@ async function searchWithDeepSeek(query) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const author = requestedAuthor(query);
   const genres = requestedGenres(query);
-  if (!apiKey) return { candidates: author ? [] : demoCandidates, mode: 'demo', requestedAuthor: author || undefined };
+  if (!apiKey) return { candidates: author ? [] : await enrichCandidatesWithPoetrySource(demoCandidates), mode: 'demo', requestedAuthor: author || undefined };
 
   const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
     method: 'POST',
@@ -64,7 +65,8 @@ async function searchWithDeepSeek(query) {
     const hasVerse = filtered.some(item => /诗|词|曲/.test(item.genre));
     if (!hasProse || !hasVerse) throw new Error('模型未能同时返回诗词和古文，请重试');
   }
-  return { candidates: filtered, mode: 'deepseek', requestedAuthor: author || undefined, requestedGenres: genres };
+  const sourced = await enrichCandidatesWithPoetrySource(filtered);
+  return { candidates: sourced, mode: 'deepseek', requestedAuthor: author || undefined, requestedGenres: genres };
 }
 
 module.exports = async function handler(req, res) {

@@ -1,8 +1,15 @@
 const { checkRateLimit, fetchWithTimeout } = require('./_security.js');
+const { MAX_SOURCE_LINES } = require('./_poetry-source.js');
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
+}
+
+function sampleSourceLines(lines, limit = 120) {
+  const cleaned = (Array.isArray(lines) ? lines : []).slice(0, MAX_SOURCE_LINES).map(line => String(line).trim().slice(0, 500)).filter(Boolean);
+  if (cleaned.length <= limit) return cleaned;
+  return Array.from({ length: limit }, (_, index) => cleaned[Math.floor(index * cleaned.length / limit)]);
 }
 
 function demoCurate(works) {
@@ -73,7 +80,7 @@ module.exports = async function handler(req, res) {
     const body = raw ? JSON.parse(raw) : (req.body || {});
     const works = Array.isArray(body.works) ? body.works.slice(0, 6).map(work => ({
       author: String(work.author || '佚名'), title: String(work.title || '无题'),
-      lines: Array.isArray(work.lines) ? work.lines.slice(0, 9).map(String) : []
+      lines: sampleSourceLines(work.lines)
     })).filter(work => work.lines.length) : [];
     if (!works.length) return send(res, 400, { error: '请至少选择一篇作品' });
     send(res, 200, await curateWithDeepSeek(works));

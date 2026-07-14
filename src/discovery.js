@@ -7,6 +7,9 @@
   let currentCandidates=[];
 
   const escapeHtml=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const sourceBadge=item=>item.sourceStatus==='poetry-api'
+    ? `<span class="source-badge verified">诗泉原文 · ${Number(item.sourceLineCount||item.lines?.length||0)} 句</span>`
+    : item.sourceStatus==='model-unverified'?'<span class="source-badge unverified">AI 候选 · 原文待核验</span>':'';
   function createCustomCard({quotes,name,meta,ghost,seal,workName}){
     const limited=quotes.map(line=>String(line).trim()).filter(Boolean).slice(0,9);
     if(!limited.length)return;
@@ -52,7 +55,8 @@
         chooseView.innerHTML=`<div class="search-state">${escapeHtml(error.message)}</div>`;
       }
     };
-    searchResults.innerHTML=`${requestedAuthor?`<div class="intent-lock">当前限定作者：${escapeHtml(requestedAuthor)}，其他作者的候选会被自动过滤。</div>`:''}<div class="result-head"><h3>勾选作品</h3><span>${mode==='demo'?'演示数据 · 配置 DeepSeek 后启用实时搜索':'AI 候选 · 原文请在发布前核验'}</span></div><div class="candidate-grid">${candidates.map((item,index)=>`<label class="candidate" data-candidate="${index}"><input type="checkbox" class="candidate-check" value="${index}">${item.sourceStatus==='model-unverified'?'<span class="unverified-badge">⚠ AI 候选 · 原文待核验</span>':''}<small>${escapeHtml(item.dynasty)} · ${escapeHtml(item.author)} · ${escapeHtml(item.genre||'诗词')}</small><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.reason)}</p><div class="line-preview">${escapeHtml(item.lines[0]||'')}</div></label>`).join('')}</div><div class="multi-select-bar"><span>请至少选择一篇作品</span><div class="selection-mode-actions"><button class="primary" disabled id="aiSelectBtn">AI 帮选</button><button disabled id="manualSelectBtn">自己选句</button></div></div>`;
+    const verifiedCount=candidates.filter(item=>item.sourceStatus==='poetry-api').length;
+    searchResults.innerHTML=`${requestedAuthor?`<div class="intent-lock">当前限定作者：${escapeHtml(requestedAuthor)}，其他作者的候选会被自动过滤。</div>`:''}<div class="result-head"><h3>勾选作品</h3><span>${verifiedCount?`${verifiedCount} 篇已匹配诗泉完整原文 · 其余候选待核验`:mode==='demo'?'演示数据 · 配置 DeepSeek 后启用实时搜索':'AI 候选 · 原文请在发布前核验'}</span></div><div class="candidate-grid">${candidates.map((item,index)=>`<label class="candidate" data-candidate="${index}"><input type="checkbox" class="candidate-check" value="${index}">${sourceBadge(item)}<small>${escapeHtml(item.dynasty)} · ${escapeHtml(item.author)} · ${escapeHtml(item.genre||'诗词')}</small><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.reason)}</p><div class="line-preview">${escapeHtml(item.lines[0]||'')}</div></label>`).join('')}</div><div class="multi-select-bar"><span>请至少选择一篇作品</span><div class="selection-mode-actions"><button class="primary" disabled id="aiSelectBtn">AI 帮选</button><button disabled id="manualSelectBtn">自己选句</button></div></div>`;
     searchResults.querySelectorAll('.candidate input[type="checkbox"]').forEach(cb=>{
       cb.onchange=()=>{
         const index=Number(cb.value);
@@ -77,11 +81,28 @@
       return {work,lines:lines.map((text,lineIndex)=>({id:`${workIndex}-${lineIndex}`,text,source:`${work.author}《${work.title}》`}))};
     });
     const selectedLines=[];
-    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>请选择 4–9 句<br>推荐选择 7 句</div></aside><div><div class="result-head"><h3>自己选句</h3><span id="manualCount">已选择 0 句 · 至少还需 4 句</span></div><div class="curate-rule">句子按作品分组。普通模板展示前 7 句，“字阵残章”最多展示 9 句；可在下方调整最终顺序。</div><div class="manual-groups">${groups.map(group=>`<section class="manual-work"><h4>${escapeHtml(group.work.author)} · 《${escapeHtml(group.work.title)}》</h4><div class="manual-lines">${group.lines.map(line=>`<label class="manual-line"><input type="checkbox" data-line-id="${line.id}"><span>${escapeHtml(line.text)}</span></label>`).join('')}</div></section>`).join('')}</div><div class="manual-order" id="manualOrder"></div><div class="curate-actions"><button class="confirm" id="createManualCard" disabled>生成阅读卡</button></div></div></div>`;
+    const verifiedWorks=works.filter(work=>work.sourceStatus==='poetry-api').length;
+    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>请选择 4–9 句<br>推荐选择 7 句<br><br>${verifiedWorks?`${verifiedWorks} 篇来自诗泉完整原文`:'当前为 AI 候选句，请核验原文'}</div></aside><div><div class="result-head"><h3>全文自选</h3><span id="manualCount">已选择 0 句 · 至少还需 4 句</span></div><div class="curate-rule">已匹配诗泉的作品会展示完整原文；未匹配的古文或作品暂时展示 AI 候选。普通模板展示前 7 句，“字阵残章”最多展示 9 句。</div><div class="manual-filter"><input id="manualLineSearch" type="search" placeholder="在原文中搜索关键词" autocomplete="off"><button type="button" id="manualSelectedOnly">只看已选</button></div><div class="manual-groups">${groups.map(group=>`<details class="manual-work" open><summary><span>${escapeHtml(group.work.author)} · 《${escapeHtml(group.work.title)}》</span><small class="${group.work.sourceStatus==='poetry-api'?'verified':'unverified'}">${group.work.sourceStatus==='poetry-api'?'诗泉完整原文':'AI候选待核验'} · ${group.lines.length} 句</small></summary><div class="manual-lines">${group.lines.map(line=>`<label class="manual-line"><input type="checkbox" data-line-id="${line.id}"><span>${escapeHtml(line.text)}</span></label>`).join('')}</div></details>`).join('')}</div><div class="manual-order" id="manualOrder"></div><div class="curate-actions"><button class="confirm" id="createManualCard" disabled>生成阅读卡</button></div></div></div>`;
     const allLines=groups.flatMap(group=>group.lines);
     const countLabel=chooseView.querySelector('#manualCount');
     const orderTray=chooseView.querySelector('#manualOrder');
     const createButton=chooseView.querySelector('#createManualCard');
+    const searchInput=chooseView.querySelector('#manualLineSearch');
+    const selectedOnlyButton=chooseView.querySelector('#manualSelectedOnly');
+    let selectedOnly=false;
+    const applyFilter=()=>{
+      const query=searchInput.value.trim().normalize('NFKC').toLowerCase();
+      chooseView.querySelectorAll('.manual-work').forEach(group=>{
+        let visible=0;
+        group.querySelectorAll('.manual-line').forEach(label=>{
+          const matchesText=!query||label.textContent.normalize('NFKC').toLowerCase().includes(query);
+          const matchesSelected=!selectedOnly||label.querySelector('input').checked;
+          label.hidden=!(matchesText&&matchesSelected);
+          if(!label.hidden)visible+=1;
+        });
+        group.hidden=visible===0;
+      });
+    };
     const refresh=()=>{
       const count=selectedLines.length;
       countLabel.textContent=count<4?`已选择 ${count} 句 · 至少还需 ${4-count} 句`:`已选择 ${count} 句${count===7?' · 推荐数量':count===9?' · 已达上限':''}`;
@@ -94,6 +115,7 @@
         [selectedLines[from],selectedLines[to]]=[selectedLines[to],selectedLines[from]];
         refresh();
       });
+      applyFilter();
     };
     chooseView.querySelectorAll('.manual-line input').forEach(input=>input.onchange=()=>{
       const line=allLines.find(item=>item.id===input.dataset.lineId);
@@ -104,6 +126,8 @@
       }
       refresh();
     });
+    searchInput.oninput=applyFilter;
+    selectedOnlyButton.onclick=()=>{selectedOnly=!selectedOnly;selectedOnlyButton.classList.toggle('active',selectedOnly);selectedOnlyButton.textContent=selectedOnly?'查看全部':'只看已选';applyFilter()};
     chooseView.querySelector('#backToResults').onclick=()=>{chooseView.hidden=true;searchView.hidden=false};
     createButton.onclick=()=>{
       if(selectedLines.length<4||selectedLines.length>9)return;
@@ -118,7 +142,8 @@
   function showCurateView(quotes,themeChar,mode,works){
     const authorNames=[...new Set(works.map(w=>w.author))].join('·');
     const workNames=works.map(w=>`《${w.title}》`).join('、');
-    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>${mode==='demo'?'演示策展':'AI 策展 · 原文请在发布前核验'}<br>共 ${quotes.length} 句</div></aside><div><div class="result-head"><h3>AI 策展结果</h3><span>可编辑后生成卡片</span></div><div class="curate-rule">普通模板展示前 7 句；“字阵残章”最多展示 9 句。切换模板不会删除句子。</div><div class="curate-list">${quotes.map((item,index)=>`<div class="curate-quote"><textarea data-index="${index}" readOnly>${escapeHtml(item.text)}</textarea><div class="curate-source">—— ${escapeHtml(item.source)}${index>=7?' · 仅字阵残章展示':''}</div></div>`).join('')}</div><div class="curate-actions"><button id="editCurated">编辑原文</button><button class="confirm" id="createCuratedCard">生成阅读卡</button></div></div></div>`;
+    const allVerified=works.every(work=>work.sourceStatus==='poetry-api');
+    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>${mode==='demo'?'演示策展':allVerified?'AI 策展 · 选自诗泉原文':'AI 策展 · 原文请在发布前核验'}<br>共 ${quotes.length} 句</div></aside><div><div class="result-head"><h3>AI 策展结果</h3><span>可编辑后生成卡片</span></div><div class="curate-rule">普通模板展示前 7 句；“字阵残章”最多展示 9 句。切换模板不会删除句子。</div><div class="curate-list">${quotes.map((item,index)=>`<div class="curate-quote"><textarea data-index="${index}" readOnly>${escapeHtml(item.text)}</textarea><div class="curate-source">—— ${escapeHtml(item.source)}${index>=7?' · 仅字阵残章展示':''}</div></div>`).join('')}</div><div class="curate-actions"><button id="editCurated">编辑原文</button><button class="confirm" id="createCuratedCard">生成阅读卡</button></div></div></div>`;
     chooseView.querySelector('#backToResults').onclick=()=>{chooseView.hidden=true;searchView.hidden=false};
     chooseView.querySelector('#editCurated').onclick=()=>{const tas=chooseView.querySelectorAll('.curate-quote textarea');const toggling=!tas[0]?.readOnly;tas.forEach(t=>t.readOnly=toggling)};
     chooseView.querySelector('#createCuratedCard').onclick=()=>{

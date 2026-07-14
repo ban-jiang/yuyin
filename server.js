@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const lyricsApiHandler = require('./api/lyrics.js');
+const { enrichCandidatesWithPoetrySource, MAX_SOURCE_LINES } = require('./api/_poetry-source.js');
 
 const ROOT = __dirname;
 const localEnvPath = path.join(ROOT, '.env.local');
@@ -47,7 +48,7 @@ function readBody(req) {
     let data = '';
     req.on('data', chunk => {
       data += chunk;
-      if (data.length > 20000) reject(new Error('Request too large'));
+      if (data.length > 120000) reject(new Error('Request too large'));
     });
     req.on('end', () => resolve(data));
     req.on('error', reject);
@@ -83,7 +84,7 @@ async function searchWithDeepSeek(query) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const author = requestedAuthor(query);
   const genres = requestedGenres(query);
-  if (!apiKey) return { candidates: author ? [] : demoCandidates.default, mode: 'demo', requestedAuthor: author || undefined };
+  if (!apiKey) return { candidates: author ? [] : await enrichCandidatesWithPoetrySource(demoCandidates.default), mode: 'demo', requestedAuthor: author || undefined };
 
   const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
@@ -108,7 +109,8 @@ async function searchWithDeepSeek(query) {
     const hasVerse = filtered.some(item => /诗|词|曲/.test(item.genre));
     if (!hasProse || !hasVerse) throw new Error('模型未能同时返回诗词和古文，请重试');
   }
-  return { candidates: filtered, mode: 'deepseek', requestedAuthor: author || undefined, requestedGenres: genres };
+  const sourced = await enrichCandidatesWithPoetrySource(filtered);
+  return { candidates: sourced, mode: 'deepseek', requestedAuthor: author || undefined, requestedGenres: genres };
 }
 
 function demoCurate(works) {
@@ -123,6 +125,12 @@ function demoCurate(works) {
   const joined = quotes.map(item => item.text).join('');
   const themeChar = (joined.match(/[月江山风雨云花雪酒剑舟灯]/) || ['诗'])[0];
   return { quotes, themeChar, mode: 'demo' };
+}
+
+function sampleSourceLines(lines, limit = 120) {
+  const cleaned = (Array.isArray(lines) ? lines : []).slice(0, MAX_SOURCE_LINES).map(line => String(line).trim().slice(0, 500)).filter(Boolean);
+  if (cleaned.length <= limit) return cleaned;
+  return Array.from({ length: limit }, (_, index) => cleaned[Math.floor(index * cleaned.length / limit)]);
 }
 
 function ensureQuoteCount(quotes, works) {
@@ -191,7 +199,7 @@ async function handleCurate(req, res) {
     const body = JSON.parse(raw || '{}');
     const works = Array.isArray(body.works) ? body.works.slice(0, 6).map(work => ({
       author: String(work.author || '佚名'), title: String(work.title || '无题'),
-      lines: Array.isArray(work.lines) ? work.lines.slice(0, 9).map(String) : []
+      lines: sampleSourceLines(work.lines)
     })).filter(work => work.lines.length) : [];
     if (!works.length) return send(res, 400, { error: '请至少选择一篇作品' });
     send(res, 200, await curateWithDeepSeek(works));
