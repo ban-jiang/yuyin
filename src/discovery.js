@@ -9,7 +9,34 @@
   const escapeHtml=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const sourceBadge=item=>item.sourceStatus==='poetry-api'
     ? `<span class="source-badge verified">诗泉原文 · ${Number(item.sourceLineCount||item.lines?.length||0)} 句</span>`
+    : item.sourceStatus==='ai-prose-reviewed'?`<span class="source-badge ${item.verification==='high'?'verified':'unverified'}">AI双重校验 · ${Math.round(Number(item.verificationRatio||0)*100)}% 一致</span>`
     : item.sourceStatus==='model-unverified'?'<span class="source-badge unverified">AI 候选 · 原文待核验</span>':'';
+  const isProseWork=work=>/古文|散文|赋|序|记|书|传|论|表|策/.test(String(work.genre||''));
+  const workSourceMeta=work=>work.sourceStatus==='poetry-api'
+    ? {label:'诗泉完整原文',className:'verified'}
+    : work.sourceStatus==='ai-prose-reviewed'
+      ? {label:`AI双重校验 · ${Math.round(Number(work.verificationRatio||0)*100)}%一致`,className:work.verification==='high'?'verified':'unverified'}
+      : {label:'AI候选待核验',className:'unverified'};
+  const curationLines=work=>{
+    if(!Array.isArray(work.lineConfidence))return work.lines;
+    const matched=work.lines.filter((line,index)=>work.lineConfidence[index]==='matched');
+    return matched.length>=4?matched:work.lines;
+  };
+
+  async function prepareSelectedWorks(works){
+    const proseWorks=works.filter(work=>isProseWork(work)&&work.sourceStatus!=='ai-prose-reviewed');
+    if(!proseWorks.length)return works;
+    const result=await window.YuyinApi.expandProse(proseWorks.map(work=>({id:work.id,author:work.author,title:work.title,genre:work.genre,lines:work.lines})));
+    const expandedById=new Map(result.works.map(work=>[work.id,work]));
+    const expanded=works.map(work=>expandedById.has(work.id)?{...work,...expandedById.get(work.id)}:work);
+    expanded.forEach(work=>{const index=currentCandidates.findIndex(item=>item.id===work.id);if(index>=0)currentCandidates[index]=work});
+    return expanded;
+  }
+
+  function showPreparationError(error){
+    chooseView.innerHTML=`<div class="search-state">${escapeHtml(error.message)}<br><br><button class="example" id="backAfterPrepareError">← 返回候选</button></div>`;
+    chooseView.querySelector('#backAfterPrepareError').onclick=()=>{chooseView.hidden=true;searchView.hidden=false};
+  }
   function createCustomCard({quotes,name,meta,ghost,seal,workName}){
     const limited=quotes.map(line=>String(line).trim()).filter(Boolean).slice(0,9);
     if(!limited.length)return;
@@ -45,14 +72,15 @@
     };
     const doCurate=async()=>{
       if(!selected.size)return;
-      const works=[...selected].map(i=>currentCandidates[i]);
-      chooseView.innerHTML='<div class="search-state">正在从所选诗词中策展句子……</div>';
+      let works=[...selected].map(i=>currentCandidates[i]);
+      chooseView.innerHTML=`<div class="search-state">${works.some(isProseWork)?'正在生成完整古文并进行双重校验……':'正在从所选诗词中策展句子……'}</div>`;
       searchView.hidden=true;chooseView.hidden=false;
       try{
-        const result=await window.YuyinApi.curatePoetry(works.map(w=>({author:w.author,title:w.title,lines:w.lines})));
+        works=await prepareSelectedWorks(works);
+        const result=await window.YuyinApi.curatePoetry(works.map(w=>({author:w.author,title:w.title,lines:curationLines(w)})));
         showCurateView(result.quotes||[],result.themeChar||'诗',result.mode||'demo',works);
       }catch(error){
-        chooseView.innerHTML=`<div class="search-state">${escapeHtml(error.message)}</div>`;
+        showPreparationError(error);
       }
     };
     const verifiedCount=candidates.filter(item=>item.sourceStatus==='poetry-api').length;
@@ -66,7 +94,7 @@
       };
     });
     searchResults.querySelector('#aiSelectBtn').onclick=doCurate;
-    searchResults.querySelector('#manualSelectBtn').onclick=()=>showManualSelectView([...selected].map(i=>currentCandidates[i]));
+    searchResults.querySelector('#manualSelectBtn').onclick=async()=>{let works=[...selected].map(i=>currentCandidates[i]);searchView.hidden=true;chooseView.hidden=false;chooseView.innerHTML=`<div class="search-state">${works.some(isProseWork)?'正在生成完整古文并进行双重校验……':'正在准备完整原文……'}</div>`;try{works=await prepareSelectedWorks(works);showManualSelectView(works)}catch(error){showPreparationError(error)}};
     searchResults.querySelectorAll('.candidate').forEach(label=>{
       label.addEventListener('click',function(e){if(e.target.tagName==='INPUT')return;e.preventDefault();const cb=this.querySelector('input[type="checkbox"]');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'))});
     });
@@ -77,12 +105,13 @@
     const workNames=works.map(work=>`《${work.title}》`).join('、');
     const groups=works.map((work,workIndex)=>{
       const seen=new Set();
-      const lines=(work.lines||[]).map(line=>String(line).trim()).filter(line=>line&&!seen.has(line)&&seen.add(line));
-      return {work,lines:lines.map((text,lineIndex)=>({id:`${workIndex}-${lineIndex}`,text,source:`${work.author}《${work.title}》`}))};
+      const lines=[];
+      (work.lines||[]).forEach((line,sourceIndex)=>{const text=String(line).trim();if(text&&!seen.has(text)){seen.add(text);lines.push({text,confidence:work.lineConfidence?.[sourceIndex]||''})}});
+      return {work,lines:lines.map((line,lineIndex)=>({id:`${workIndex}-${lineIndex}`,text:line.text,source:`${work.author}《${work.title}》`,confidence:line.confidence}))};
     });
     const selectedLines=[];
-    const verifiedWorks=works.filter(work=>work.sourceStatus==='poetry-api').length;
-    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>请选择 4–9 句<br>推荐选择 7 句<br><br>${verifiedWorks?`${verifiedWorks} 篇来自诗泉完整原文`:'当前为 AI 候选句，请核验原文'}</div></aside><div><div class="result-head"><h3>全文自选</h3><span id="manualCount">已选择 0 句 · 至少还需 4 句</span></div><div class="curate-rule">已匹配诗泉的作品会展示完整原文；未匹配的古文或作品暂时展示 AI 候选。普通模板展示前 7 句，“字阵残章”最多展示 9 句。</div><div class="manual-filter"><input id="manualLineSearch" type="search" placeholder="在原文中搜索关键词" autocomplete="off"><button type="button" id="manualSelectedOnly">只看已选</button></div><div class="manual-groups">${groups.map(group=>`<details class="manual-work" open><summary><span>${escapeHtml(group.work.author)} · 《${escapeHtml(group.work.title)}》</span><small class="${group.work.sourceStatus==='poetry-api'?'verified':'unverified'}">${group.work.sourceStatus==='poetry-api'?'诗泉完整原文':'AI候选待核验'} · ${group.lines.length} 句</small></summary><div class="manual-lines">${group.lines.map(line=>`<label class="manual-line"><input type="checkbox" data-line-id="${line.id}"><span>${escapeHtml(line.text)}</span></label>`).join('')}</div></details>`).join('')}</div><div class="manual-order" id="manualOrder"></div><div class="curate-actions"><button class="confirm" id="createManualCard" disabled>生成阅读卡</button></div></div></div>`;
+    const verifiedWorks=works.filter(work=>work.sourceStatus==='poetry-api'||work.sourceStatus==='ai-prose-reviewed').length;
+    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>请选择 4–9 句<br>推荐选择 7 句<br><br>${verifiedWorks?`${verifiedWorks} 篇已取得完整原文`:'当前为 AI 候选句，请核验原文'}</div></aside><div><div class="result-head"><h3>全文自选</h3><span id="manualCount">已选择 0 句 · 至少还需 4 句</span></div><div class="curate-rule">诗词曲来自诗泉；古文由两个模型独立生成并逐句比较。黄色句子表示两次结果存在差异，请重点核验。普通模板展示前 7 句，“字阵残章”最多展示 9 句。</div><div class="manual-filter"><input id="manualLineSearch" type="search" placeholder="在原文中搜索关键词" autocomplete="off"><button type="button" id="manualSelectedOnly">只看已选</button></div><div class="manual-groups">${groups.map(group=>{const meta=workSourceMeta(group.work);return `<details class="manual-work" open><summary><span>${escapeHtml(group.work.author)} · 《${escapeHtml(group.work.title)}》</span><small class="${meta.className}">${escapeHtml(meta.label)} · ${group.lines.length} 句</small></summary><div class="manual-lines">${group.lines.map(line=>`<label class="manual-line ${line.confidence==='different'?'has-difference':''}"><input type="checkbox" data-line-id="${line.id}"><span>${escapeHtml(line.text)}${line.confidence==='different'?'<small class="line-warning">双模型结果存在差异</small>':''}</span></label>`).join('')}</div></details>`}).join('')}</div><div class="manual-order" id="manualOrder"></div><div class="curate-actions"><button class="confirm" id="createManualCard" disabled>生成阅读卡</button></div></div></div>`;
     const allLines=groups.flatMap(group=>group.lines);
     const countLabel=chooseView.querySelector('#manualCount');
     const orderTray=chooseView.querySelector('#manualOrder');
@@ -142,8 +171,8 @@
   function showCurateView(quotes,themeChar,mode,works){
     const authorNames=[...new Set(works.map(w=>w.author))].join('·');
     const workNames=works.map(w=>`《${w.title}》`).join('、');
-    const allVerified=works.every(work=>work.sourceStatus==='poetry-api');
-    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>${mode==='demo'?'演示策展':allVerified?'AI 策展 · 选自诗泉原文':'AI 策展 · 原文请在发布前核验'}<br>共 ${quotes.length} 句</div></aside><div><div class="result-head"><h3>AI 策展结果</h3><span>可编辑后生成卡片</span></div><div class="curate-rule">普通模板展示前 7 句；“字阵残章”最多展示 9 句。切换模板不会删除句子。</div><div class="curate-list">${quotes.map((item,index)=>`<div class="curate-quote"><textarea data-index="${index}" readOnly>${escapeHtml(item.text)}</textarea><div class="curate-source">—— ${escapeHtml(item.source)}${index>=7?' · 仅字阵残章展示':''}</div></div>`).join('')}</div><div class="curate-actions"><button id="editCurated">编辑原文</button><button class="confirm" id="createCuratedCard">生成阅读卡</button></div></div></div>`;
+    const allVerified=works.every(work=>work.sourceStatus==='poetry-api'||work.sourceStatus==='ai-prose-reviewed');
+    chooseView.innerHTML=`<div class="chooser"><aside><button class="example" id="backToResults">← 返回候选</button><h3>${escapeHtml(authorNames)}</h3><div class="chooser-meta">${escapeHtml(workNames)}<br><br>${mode==='demo'?'演示策展':allVerified?'AI 策展 · 选自完整原文':'AI 策展 · 原文请在发布前核验'}<br>共 ${quotes.length} 句</div></aside><div><div class="result-head"><h3>AI 策展结果</h3><span>可编辑后生成卡片</span></div><div class="curate-rule">普通模板展示前 7 句；“字阵残章”最多展示 9 句。切换模板不会删除句子。</div><div class="curate-list">${quotes.map((item,index)=>`<div class="curate-quote"><textarea data-index="${index}" readOnly>${escapeHtml(item.text)}</textarea><div class="curate-source">—— ${escapeHtml(item.source)}${index>=7?' · 仅字阵残章展示':''}</div></div>`).join('')}</div><div class="curate-actions"><button id="editCurated">编辑原文</button><button class="confirm" id="createCuratedCard">生成阅读卡</button></div></div></div>`;
     chooseView.querySelector('#backToResults').onclick=()=>{chooseView.hidden=true;searchView.hidden=false};
     chooseView.querySelector('#editCurated').onclick=()=>{const tas=chooseView.querySelectorAll('.curate-quote textarea');const toggling=!tas[0]?.readOnly;tas.forEach(t=>t.readOnly=toggling)};
     chooseView.querySelector('#createCuratedCard').onclick=()=>{

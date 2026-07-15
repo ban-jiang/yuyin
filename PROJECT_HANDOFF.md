@@ -225,3 +225,13 @@ node server.js
 - 实测来源匹配：苏轼《定风波·莫听穿林打叶声》匹配诗泉《定风波》11句；辛弃疾《青玉案·元夕》匹配《青玉案》8句；李白《将进酒》匹配同名作品12句。作者与标题均正确。
 - 契约测试：模拟DeepSeek候选后，`/api/search` 返回12句诗泉全文；`/api/curate` 收到全部12句并能选中第12句，确认中间链路不再截回9句。全部服务端和浏览器脚本通过语法及共同编译检查。
 - 当前推荐 `DEEPSEEK_MODEL=deepseek-chat`，用于意图识别、候选和策展。古文双模型阶段预留 `DEEPSEEK_REVIEW_MODEL=deepseek-reasoner`；同一模型二次自审不能替代程序差异比较和用户确认。
+
+## v0.7 古文双模型全文（2026-07-15）
+
+- 新增 `POST /api/prose`，同时提供 Vercel、Netlify Function 和本地 Node 路由。古文不在搜索阶段为全部候选生成全文，而是在用户点击“AI帮选”或“全文自选”后，仅对已选古文按需调用，控制等待时间与API成本。
+- 主版本使用 `DEEPSEEK_PROSE_MODEL` 或 `DEEPSEEK_MODEL`（默认 `deepseek-chat`）；第二个独立版本使用 `DEEPSEEK_REVIEW_MODEL`（推荐 `deepseek-reasoner`）。两个请求并行、温度为0，第二个模型看不到第一个模型的答案，避免简单的自我认可式审查。
+- 两份结果统一断成最多240句。程序去除标点和空白后逐句检查主版本句子是否完整出现在第二版本中，计算按字符加权的一致率；一致率分为高/中/低，并为每句记录 `matched` 或 `different`。
+- 全文自选界面对差异句显示黄色背景和“​​双模型结果存在差异”提示；作品标题显示双模型一致率。用户仍可选择差异句，但被明确要求重点核验。完整结果按作者、篇名和模型组合缓存24小时。
+- 前端将展开后的古文写回当前候选，返回候选页后再次进入不会重复付费生成。诗词曲继续使用诗泉，混选诗词与古文时两种来源进入同一个全文自选和AI策展流程。
+- 实际调用验证：`deepseek-chat` 与 `deepseek-reasoner` 并行生成《岳阳楼记》，约9秒返回18句；总体一致率88.6%，1句被标为差异，证明真实模型响应、JSON解析、分句和差异检测链路可用。
+- 部署必须配置 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL=deepseek-chat`、`DEEPSEEK_REVIEW_MODEL=deepseek-reasoner`。Vercel函数最长执行时间提高到60秒；Netlify继续使用同步Function，需关注具体套餐的函数超时限制。

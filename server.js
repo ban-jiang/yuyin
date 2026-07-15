@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const lyricsApiHandler = require('./api/lyrics.js');
+const proseApiHandler = require('./api/prose.js');
 const { enrichCandidatesWithPoetrySource, MAX_SOURCE_LINES } = require('./api/_poetry-source.js');
 
 const ROOT = __dirname;
@@ -217,6 +218,15 @@ async function handleLyrics(req, res) {
   }
 }
 
+async function handleProse(req, res) {
+  try {
+    req.body = await readBody(req);
+    await proseApiHandler(req, res);
+  } catch (error) {
+    send(res, 502, { error: '古文全文生成或校验失败，请稍后重试', detail: error.message });
+  }
+}
+
 function serveStatic(req, res) {
   const requestPath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
   const filePath = path.resolve(ROOT, `.${requestPath}`);
@@ -238,6 +248,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/search') return handleApi(req, res);
   if (req.method === 'POST' && req.url === '/api/curate') return handleCurate(req, res);
   if (req.method === 'POST' && req.url === '/api/lyrics') return handleLyrics(req, res);
+  if (req.method === 'POST' && req.url === '/api/prose') return handleProse(req, res);
   if (req.method === 'GET') return serveStatic(req, res);
   send(res, 405, { error: 'Method not allowed' });
 });

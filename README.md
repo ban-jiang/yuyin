@@ -24,22 +24,23 @@ node server.js
 
 密钥只存在服务端环境变量中，不会发送到浏览器。生产部署时应在 Vercel、Netlify 或服务器控制台配置环境变量。项目已为 AI 接口增加基础频率限制、超时和热实例缓存。
 
-模型建议：当前搜索意图识别、候选生成和卡片策展统一使用 `deepseek-chat`，它的结构化 JSON 输出更稳定且成本较低。下一阶段实现古文双重校验时，使用 `deepseek-chat` 独立生成原文，再用 `deepseek-reasoner` 审查存在差异的段落；对应预留变量为 `DEEPSEEK_REVIEW_MODEL`。诗泉无需 API Key，`POETRY_API_BASE_URL` 通常保持默认值即可。
+模型建议：搜索意图识别、候选生成、卡片策展和古文主版本使用 `deepseek-chat`，它的结构化 JSON 输出更稳定且成本较低；古文第二个独立版本使用 `deepseek-reasoner`，程序再逐句比较两份结果。对应变量为 `DEEPSEEK_REVIEW_MODEL`。诗泉无需 API Key，`POETRY_API_BASE_URL` 通常保持默认值即可。
 
 Netlify 配置路径：`Site configuration → Environment variables`。至少添加：
 
 ```text
 DEEPSEEK_API_KEY = 你的新密钥
 DEEPSEEK_MODEL = deepseek-chat
+DEEPSEEK_REVIEW_MODEL = deepseek-reasoner
 ```
 
-保存后进入 `Deploys → Trigger deploy → Deploy site`。古文双模型功能上线后再增加 `DEEPSEEK_REVIEW_MODEL=deepseek-reasoner`。
+保存后进入 `Deploys → Trigger deploy → Deploy site`。
 
 ## 当前流程
 
 1. 用户搜索古代诗人、词人、文学家和作品，或粘贴自己有权使用的古风歌词。
-2. 后端调用 DeepSeek 识别候选作品；诗、词、曲再通过诗泉按作者、标题和代表性原句精确匹配完整原文，未匹配内容继续标记为待核验。
-3. 用户选择作品后，可选择“AI帮选”或“全文自选”；全文自选支持关键词筛选、折叠作品、只看已选，并从完整原文中选择和排序4-9句。歌词由用户从AI候选中选择4-9句。
+2. 后端调用 DeepSeek 识别候选作品；诗、词、曲通过诗泉匹配完整原文，古文在用户选中后由两个模型独立生成并逐句比较。
+3. 用户选择作品后，可选择“AI帮选”或“全文自选”；全文自选支持关键词筛选、折叠作品、只看已选，并对古文差异句显示黄色提示，最终选择和排序4-9句。歌词由用户从AI候选中选择4-9句。
 4. 用户调整模板、A/B构图、画幅、简繁、背景和单句样式。
 5. 作品自动保存到浏览器最近10张历史，最终通过纯净预览和系统截图保存。
 
@@ -56,5 +57,6 @@ DEEPSEEK_MODEL = deepseek-chat
 - `src/app.js`：最小启动入口。
 - `src/api.js`：浏览器端 API 请求。
 - `api/_poetry-source.js`：诗泉全文查询、精确匹配、缓存与来源标记。
+- `api/prose.js`：古文双模型全文生成、逐句一致性比较和缓存。
 
-诗泉精确匹配的内容标记为“诗泉原文”；未匹配的模型候选仍标记为“待核验”，并保留用户编辑和确认步骤。
+诗泉精确匹配的内容标记为“诗泉原文”；古文标记双模型一致率并突出差异句。模型结果仍不能代替权威校勘，必须保留用户审查和确认步骤。

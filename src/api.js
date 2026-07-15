@@ -65,5 +65,27 @@
     }
   }
 
-  window.YuyinApi = { searchPoetry, curatePoetry, extractLyrics };
+  async function expandProse(works, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeout || 60000);
+    try {
+      const response = await fetch('/api/prose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ works }),
+        signal: controller.signal
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '古文全文生成失败');
+      if (!Array.isArray(result.works)) throw new Error('古文全文格式无效');
+      return result;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('古文全文生成超时，请稍后重试');
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  window.YuyinApi = { searchPoetry, curatePoetry, extractLyrics, expandProse };
 })();
